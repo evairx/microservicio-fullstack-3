@@ -25,8 +25,47 @@ export async function userRepository() {
         )
 
         return {
-            async createUser() {
+            async signUp({ name, email, password }: { name: string, email: string, password: string }) {
+                try {
+                    const result = await client.execute({
+                        sql: `INSERT INTO users (avatar, name, email, password) VALUES (?, ?, ?, ?) RETURNING id, avatar, name, email`,
+                        args: [randomGenAvatar(), name, email, await bcrypt.hash(password, salt)]
+                    })
 
+                    return { success: true, user: result.rows[0] };
+                } catch (error) {
+                    console.error("Error al registrar usuario:", error);
+                    return { success: false, message: "Error al registrar usuario" };
+                }
+            },
+            
+            async signIn({ email, password }: { email: string, password: string }) {
+                try {
+                    const result = await client.execute({
+                        sql: `SELECT * FROM users WHERE email = ?`,
+                        args: [email]
+                    })
+
+                    if (result.rows.length === 0) return { success: false, message: "Correo electrónico o contraseña incorrectos" };
+
+                    const user = result.rows[0];
+
+                    if (typeof user.password !== "string") {
+                        return { success: false, message: "Correo electrónico o contraseña incorrectos" };
+                    }
+
+                    const isMatch = await bcrypt.compare(password, user.password);
+
+                    if (!isMatch) {
+                        return { success: false, message: "Correo electrónico o contraseña incorrectos" };
+                    }
+
+                    return { success: true, user };
+
+                } catch (err) {
+                    console.error("Error al iniciar sesión:", err);
+                    return { success: false, message: "Error al iniciar sesión" };
+                }
             }
         }
     } catch (err) {
