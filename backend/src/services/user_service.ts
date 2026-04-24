@@ -64,7 +64,7 @@ async function signIn(c: Context) {
 
         if(!res.success) return c.json({ error: res.message }, 400)
 
-        return c.json({ user: res.user }, 200)
+        return c.json(res, 200)
     } catch (err) {
         return c.json({ error: "Hubo un error al iniciar sesión" }, 500)
     }

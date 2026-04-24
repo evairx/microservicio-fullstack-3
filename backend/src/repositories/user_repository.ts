@@ -1,5 +1,7 @@
 import { createClient } from "@libsql/client";
+import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
+import { randomBytes, randomUUID } from "crypto";
 
 export async function userRepository() {
     try {
@@ -15,7 +17,22 @@ export async function userRepository() {
                     name TEXT,
                     email TEXT NOT NULL UNIQUE,
                     password TEXT NOT NULL
-                )`,
+                );
+                INDEX IF NOT EXISTS idx_users_email ON users (email);
+                `,
+                `
+                CREATE TABLE IF NOT EXISTS auth (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    refresh_token TEXT NOT NULL,
+                    signature TEXT NOT NULL,
+                    last_used DATETIME NOT NULL,
+                    expires_at DATETIME NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+                INDEX IF NOT EXISTS idx_auth_user_id ON auth (user_id);
+                INDEX IF NOT EXISTS idx_auth_signature ON auth (signature);
+                `,
                 {
                     sql: `INSERT OR IGNORE INTO users (avatar, name, email, password) VALUES (?, ?, ?, ?)`,
                     args: [randomGenAvatar(), "Pepito", "pepito@gmail.com", await bcrypt.hash("password123", salt)],
@@ -38,7 +55,6 @@ export async function userRepository() {
                     return { success: false, message: "Error al registrar usuario" };
                 }
             },
-            
             async signIn({ email, password }: { email: string, password: string }) {
                 try {
                     const result = await client.execute({
@@ -60,12 +76,36 @@ export async function userRepository() {
                         return { success: false, message: "Correo electrónico o contraseña incorrectos" };
                     }
 
-                    return { success: true, user };
+                    await client.execute({
+                        sql: `DELETE FROM auth WHERE user_id = ? AND last_used <= datetime('now', '-1 day')`,
+                        args: [user.id]
+                    });
+
+                    const refreshToken = randomBytes(32).toString('hex');
+                    const signature = randomUUID();
+
+                    await client.execute({
+                        sql: `
+                            INSERT INTO auth (user_id, refresh_token, signature, last_used, expires_at)
+                            VALUES (?, ?, ?, datetime('now'), datetime('now', '+1 hour'))
+                        `,
+                        args: [user.id, refreshToken, signature]
+                    });
+
+                    if (!process.env.JWT_SECRET) return { success: false, message: "jwt secret no configurado" };
+
+                    const user_token = jwt.sign({ userId: user.id }, signature, { expiresIn: '10m' });
+                    const token = jwt.sign({ session: user_token }, process.env.JWT_SECRET, { expiresIn: '10m' });
+
+                    return { success: true, token: token, refreshToken: refreshToken, expiresIn: 3600 };
 
                 } catch (err) {
                     console.error("Error al iniciar sesión:", err);
                     return { success: false, message: "Error al iniciar sesión" };
                 }
+            },
+            async profile({ token }: { token: string }) {
+
             }
         }
     } catch (err) {
@@ -82,5 +122,4 @@ function randomGenAvatar() {
         'https://avataaars.io/?avatarStyle=Circle&topType=LongHairStraightStrand&accessoriesType=Round&hairColor=Platinum&facialHairType=BeardLight&facialHairColor=Brown&clotheType=GraphicShirt&clotheColor=Gray01&graphicType=Skull&eyeType=Cry&eyebrowType=UpDownNatural&mouthType=Concerned&skinColor=Brown'
     ]
     return avatars[Math.floor(Math.random() * avatars.length)];
-
 }
