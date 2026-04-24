@@ -1,7 +1,8 @@
 import { createClient } from "@libsql/client";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
-import { randomBytes, randomUUID } from "crypto";
+import { randomBytes } from "crypto";
+import { generate } from 'short-uuid';
 import { v4 as uuidv4 } from "uuid";
 
 export async function userRepository() {
@@ -84,8 +85,8 @@ export async function userRepository() {
                         args: [user.id]
                     });
 
-                    const refreshToken = randomBytes(32).toString('hex');
-                    const signature = randomUUID();
+                    const refreshToken = generate();
+                    const signature = randomBytes(64).toString('hex');
 
                     const id = uuidv4();
 
@@ -97,13 +98,71 @@ export async function userRepository() {
                         args: [id, user.id, refreshToken, signature]
                     });
 
-                    if (!process.env.JWT_SECRET) return { success: false, message: "jwt secret no configurado" };
+                    const secret = process.env.JWT_SECRET;
+                    if (!secret) return { success: false, message: "jwt secret no configurado" };
 
                     const user_token = jwt.sign({auth: id, user: user.id}, signature, { expiresIn: '10m' });
-                    const token = jwt.sign({ session: user_token }, process.env.JWT_SECRET, { expiresIn: '10m' });
+                    const token = jwt.sign({ session: user_token }, secret, { expiresIn: '10m' });
 
                     return { success: true, token: token, refreshToken: refreshToken, expiresIn: 3600 };
 
+                } catch (err) {
+                    console.error("Error al iniciar sesión:", err);
+                    return { success: false, message: "Error al iniciar sesión" };
+                }
+            },
+            async refreshToken({ refreshToken }: { refreshToken: string }) {
+                try {
+                    const result = await client.execute({
+                        sql: `
+                            SELECT 
+                                a.id AS auth_id, 
+                                a.user_id, 
+                                u.id AS user_exists,
+                                CASE WHEN a.expires_at < datetime('now') THEN 1 ELSE 0 END AS is_expired
+                            FROM auth a
+                            LEFT JOIN users u ON a.user_id = u.id
+                            WHERE a.refresh_token = ?
+                        `,
+                        args: [refreshToken]
+                    });
+
+                    if (result.rows.length === 0) return { success: false, message: "Refresh token inválido" };
+
+                    const row = result.rows[0];
+
+                    if (row.is_expired === 1) return { success: false, message: "Refresh token ha expirado" };
+
+                    if (!row.user_exists) return { success: false, message: "Usuario no encontrado" };
+
+                    const authId = row.auth_id as string;
+                    const userId = row.user_id as string;
+
+                    const newRefresh = generate();
+                    const newSignature = randomBytes(64).toString('hex');
+
+                    await client.execute({
+                        sql: `
+                            UPDATE auth 
+                            SET 
+                                refresh_token = ?, 
+                                signature = ?, 
+                                last_used = datetime('now'), 
+                                expires_at = datetime('now', '+1 hour')
+                            WHERE id = ?
+                        `,
+                        args: [newRefresh, newSignature, authId]
+                    });
+
+                    const user_token = jwt.sign({ auth: authId, user: userId }, newSignature, { expiresIn: '10m' });
+
+                    const secret = process.env.JWT_SECRET;
+
+                    if (!secret) throw new Error("Falta JWT_SECRET en las variables de entorno");
+
+                    const token = jwt.sign({ session: user_token }, secret, { expiresIn: '10m' });
+
+                    return { success: true, token: token, refreshToken: newRefresh, expiresIn: 3600 };
                 } catch (err) {
                     console.error("Error al iniciar sesión:", err);
                     return { success: false, message: "Error al iniciar sesión" };
@@ -147,7 +206,7 @@ export async function userRepository() {
 
                     return { 
                         success: true, 
-                        user: userData.id, 
+                        name: userData.name, 
                         avatar: userData.avatar, 
                         email: userData.email 
                     };

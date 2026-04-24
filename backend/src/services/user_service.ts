@@ -70,6 +70,34 @@ async function signIn(c: Context) {
     }
 }
 
+async function refreshToken(c: Context) {
+    try {
+        let body;
+
+        try {
+            body = await c.req.json();
+        } catch{
+            return c.json({ error: "Campo JSON Body vacio" }, 400)
+        }
+
+        const { refreshToken } = body;
+
+        if(!refreshToken) return c.json({ error: "Falta el refresh token" }, 400)
+        
+        const userRepo = await userRepository()
+
+        if(!userRepo) return c.json({ error: "No se pudo conectar a la base de datos" }, 500)
+
+        const res = await userRepo.refreshToken({ refreshToken });
+
+        if(!res.success) return c.json({ error: res.message }, 400)
+
+        return c.json(res, 200)
+    } catch (err) {
+        return c.json({ error: "Hubo un error al obtener el perfil" }, 500)
+    }
+}
+
 async function profile(c: Context) {
     try {
         const jwttoken = c.req.header("Authorization")?.replace("Bearer ", "");
@@ -90,5 +118,6 @@ async function profile(c: Context) {
 export const UserService = {
     signUp,
     signIn,
-    profile
+    profile,
+    refreshToken
 }
