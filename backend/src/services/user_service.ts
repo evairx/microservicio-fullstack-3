@@ -70,7 +70,25 @@ async function signIn(c: Context) {
     }
 }
 
+async function profile(c: Context) {
+    try {
+        const jwttoken = c.req.header("Authorization")?.replace("Bearer ", "");
+        if(!jwttoken) return c.json({ error: "Token de autorización no proporcionado" }, 401)
+            
+        const userRepo = await userRepository()
+        if(!userRepo) return c.json({ error: "No se pudo conectar a la base de datos" }, 500)
+            
+        const res = await userRepo.profile({ jwttoken });
+        if(!res.success) return c.json({ error: res.message }, 400)
+
+        return c.json({ user: res }, 200)
+    } catch (err) {
+        return c.json({ error: "Hubo un error al obtener el perfil" }, 500)
+    }
+}
+
 export const UserService = {
     signUp,
-    signIn
+    signIn,
+    profile
 }

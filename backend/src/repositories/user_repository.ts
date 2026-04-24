@@ -2,6 +2,7 @@ import { createClient } from "@libsql/client";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import { randomBytes, randomUUID } from "crypto";
+import { v4 as uuidv4 } from "uuid";
 
 export async function userRepository() {
     try {
@@ -12,7 +13,7 @@ export async function userRepository() {
         await client.batch(
             [
                 `CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id TEXT PRIMARY KEY,
                     avatar TEXT,
                     name TEXT,
                     email TEXT NOT NULL UNIQUE,
@@ -22,20 +23,22 @@ export async function userRepository() {
                 `,
                 `
                 CREATE TABLE IF NOT EXISTS auth (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
                     refresh_token TEXT NOT NULL,
                     signature TEXT NOT NULL,
                     last_used DATETIME NOT NULL,
                     expires_at DATETIME NOT NULL,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 );
+                INDEX IF NOT EXISTS idx_auth_id ON auth (id);
+                INDEX IF NOT EXISTS idx_auth_refresh_token ON auth (refresh_token);
                 INDEX IF NOT EXISTS idx_auth_user_id ON auth (user_id);
                 INDEX IF NOT EXISTS idx_auth_signature ON auth (signature);
                 `,
                 {
-                    sql: `INSERT OR IGNORE INTO users (avatar, name, email, password) VALUES (?, ?, ?, ?)`,
-                    args: [randomGenAvatar(), "Pepito", "pepito@gmail.com", await bcrypt.hash("password123", salt)],
+                    sql: `INSERT OR IGNORE INTO users (id, avatar, name, email, password) VALUES (?, ?, ?, ?, ?)`,
+                    args: [uuidv4(), randomGenAvatar(), "Pepito", "pepito@gmail.com", await bcrypt.hash("password123", salt)],
                 }
             ],
             "write",
@@ -45,8 +48,8 @@ export async function userRepository() {
             async signUp({ name, email, password }: { name: string, email: string, password: string }) {
                 try {
                     const result = await client.execute({
-                        sql: `INSERT INTO users (avatar, name, email, password) VALUES (?, ?, ?, ?) RETURNING id, avatar, name, email`,
-                        args: [randomGenAvatar(), name, email, await bcrypt.hash(password, salt)]
+                        sql: `INSERT INTO users (id, avatar, name, email, password) VALUES (?, ?, ?, ?, ?) RETURNING id, avatar, name, email`,
+                        args: [uuidv4(), randomGenAvatar(), name, email, await bcrypt.hash(password, salt)]
                     })
 
                     return { success: true, user: result.rows[0] };
@@ -84,17 +87,19 @@ export async function userRepository() {
                     const refreshToken = randomBytes(32).toString('hex');
                     const signature = randomUUID();
 
+                    const id = uuidv4();
+
                     await client.execute({
                         sql: `
-                            INSERT INTO auth (user_id, refresh_token, signature, last_used, expires_at)
-                            VALUES (?, ?, ?, datetime('now'), datetime('now', '+1 hour'))
+                            INSERT INTO auth (id, user_id, refresh_token, signature, last_used, expires_at)
+                            VALUES (?, ?, ?, ?, datetime('now'), datetime('now', '+1 hour'))
                         `,
-                        args: [user.id, refreshToken, signature]
+                        args: [id, user.id, refreshToken, signature]
                     });
 
                     if (!process.env.JWT_SECRET) return { success: false, message: "jwt secret no configurado" };
 
-                    const user_token = jwt.sign({ userId: user.id }, signature, { expiresIn: '10m' });
+                    const user_token = jwt.sign({auth: id, user: user.id}, signature, { expiresIn: '10m' });
                     const token = jwt.sign({ session: user_token }, process.env.JWT_SECRET, { expiresIn: '10m' });
 
                     return { success: true, token: token, refreshToken: refreshToken, expiresIn: 3600 };
@@ -104,8 +109,52 @@ export async function userRepository() {
                     return { success: false, message: "Error al iniciar sesión" };
                 }
             },
-            async profile({ token }: { token: string }) {
+            async profile({ jwttoken }: { jwttoken: string }) {
+                try {
+                    if(!process.env.JWT_SECRET) return { success: false, message: "jwt secret no configurado" };
 
+                    const token = jwt.decode(jwttoken) as { userId: number, exp: number };
+
+                    if (token.exp < Math.floor(Date.now() / 1000)) {
+                        return { success: false, message: "el Token ha expirado" };
+                    }
+
+                    const decode = jwt.verify(jwttoken, process.env.JWT_SECRET) as { session: string };
+                    const session = decode.session;
+
+                    const usertoken = jwt.decode(session) as { user: number, auth: string };
+
+                    const user = await client.execute({
+                        sql: `SELECT * FROM users WHERE id = ?`,
+                        args: [usertoken.user]
+                    })
+
+                    if (user.rows.length === 0) return { success: false, message: "El usuario no existe" };
+
+                    const userData = user.rows[0];
+
+                    const auth = await client.execute({
+                        sql: `SELECT signature FROM auth WHERE id = ?`,
+                        args: [usertoken.auth]
+                    });
+
+                    if (auth.rows.length === 0) return { success: false, message: "Sesión no encontrada" };
+
+                    const authData = auth.rows[0];
+                    const signature = authData.signature as string;
+
+                    jwt.verify(session, signature);
+
+                    return { 
+                        success: true, 
+                        user: userData.id, 
+                        avatar: userData.avatar, 
+                        email: userData.email 
+                    };
+                } catch (err) {
+                    console.error("Error al iniciar sesión:", err);
+                    return { success: false, message: "Error al iniciar sesión" };
+                }
             }
         }
     } catch (err) {
