@@ -19,6 +19,8 @@ async function fetchPost() {
     }
 }
 
+const sid = Astro.cookies.get("sid")?.value || null;
+
 const { error, post } = await fetchPost();
 ---
 
@@ -48,6 +50,6 @@ const { error, post } = await fetchPost();
             </a>
         </div>
     ) : (
-        <PostDetail post={post} client:only/>
+        <PostDetail sid={sid} post={post} client:only/>
     )
 }

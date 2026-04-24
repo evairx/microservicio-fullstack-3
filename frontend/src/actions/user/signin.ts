@@ -8,7 +8,7 @@ export const signin = defineAction({
   }),
   handler: async ({ email, password }, ctx) => {
     try {
-      const res = await fetch('http://localhost:3000/user/signin', {
+      const res = await fetch('http://backend:3000/user/signin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,6 +1,5 @@
 ---
 import Layout from '../layouts/main.astro';
-
 import { IconArrowNarrowLeft, IconUserFilled, IconAt, IconMailFilled, IconLockFilled } from '@tabler/icons-preact';
 ---
 
@@ -18,7 +17,7 @@ import { IconArrowNarrowLeft, IconUserFilled, IconAt, IconMailFilled, IconLockFi
                 </a>
             </aside>
 
-            <section class="w-full flex flex-col items-center justify-center  max-w-[550px] min-h-screen border-x border-white/5 px-3 pb-20">
+            <section class="w-full flex flex-col items-center justify-center max-w-[550px] min-h-screen border-x border-white/5 px-3 pb-20">
                 <img 
                     class="w-[100px] h-[55px] object-contain"
                     src="/logo.webp"
@@ -27,13 +26,13 @@ import { IconArrowNarrowLeft, IconUserFilled, IconAt, IconMailFilled, IconLockFi
                 <h1 class="mt-5 text-[1.6rem] font-medium text-white">Crea una cuenta</h1>
                 <p class="mt-1 text-[.98rem] text-white/70">Únete a pterodactweet la plataforma de los dinosaurios</p>
 
-                <div class="mt-10 flex flex-col gap-5 w-[350px]">
+                <form id="signup-form" class="mt-10 flex flex-col gap-5 w-[350px]">
                     <label for="displayname" class="text-white/60 text-[1rem] font-medium relative">
                         Nombre en pantalla
                         <div class="absolute top-[71%] left-5 transform translate-y-[-50%] text-white/60 pointer-events-none">
                             <IconUserFilled class="w-[20px] h-[20px]" />
                         </div>
-                        <input type="text" class="bg-white/5 w-full rounded-full py-[.650rem] text-white px-12 mt-3 border-2 border-white/30  focus:border-white/60 focus:outline-none transition-colors" />
+                        <input id="displayname" type="text" required class="bg-white/5 w-full rounded-full py-[.650rem] text-white px-12 mt-3 border-2 border-white/30  focus:border-white/60 focus:outline-none transition-colors" />
                     </label>
 
                     <label for="username" class="text-white/60 text-[1rem] font-medium relative">
@@ -41,7 +40,7 @@ import { IconArrowNarrowLeft, IconUserFilled, IconAt, IconMailFilled, IconLockFi
                         <div class="absolute top-[71%] left-5 transform translate-y-[-50%] text-white/60 pointer-events-none">
                             <IconAt class="w-[20px] h-[20px]" />
                         </div>
-                        <input type="text" class="bg-white/5 w-full rounded-full py-[.650rem] text-white px-12 mt-3 border-2 border-white/30  focus:border-white/60 focus:outline-none transition-colors" />
+                        <input id="username" type="text" required class="bg-white/5 w-full rounded-full py-[.650rem] text-white px-12 mt-3 border-2 border-white/30  focus:border-white/60 focus:outline-none transition-colors" />
                     </label>
 
                     <label for="email" class="text-white/60 text-[1rem] font-medium relative">
@@ -49,7 +48,7 @@ import { IconArrowNarrowLeft, IconUserFilled, IconAt, IconMailFilled, IconLockFi
                         <div class="absolute top-[71%] left-5 transform translate-y-[-50%] text-white/60 pointer-events-none">
                             <IconMailFilled class="w-[20px] h-[20px]" />
                         </div>
-                        <input type="email" class="bg-white/5 w-full rounded-full py-[.650rem] text-white px-12 mt-3 border-2 border-white/30  focus:border-white/60 focus:outline-none transition-colors" />
+                        <input id="email" type="email" required class="bg-white/5 w-full rounded-full py-[.650rem] text-white px-12 mt-3 border-2 border-white/30  focus:border-white/60 focus:outline-none transition-colors" />
                     </label>
 
                     <label for="password" class="text-white/60 text-[1rem] font-medium relative">
@@ -57,21 +56,74 @@ import { IconArrowNarrowLeft, IconUserFilled, IconAt, IconMailFilled, IconLockFi
                         <div class="absolute top-[71%] left-5 transform translate-y-[-50%] text-white/60 pointer-events-none">
                             <IconLockFilled class="w-[20px] h-[20px]" />
                         </div>
-                        <input type="password" class="bg-white/5 w-full rounded-full py-[.650rem] text-white px-12 mt-3 border-2 border-white/30  focus:border-white/60 focus:outline-none transition-colors" />
+                        <input id="password" type="password" required class="bg-white/5 w-full rounded-full py-[.650rem] text-white px-12 mt-3 border-2 border-white/30  focus:border-white/60 focus:outline-none transition-colors" />
                     </label>
-                </div>
 
-                <div class="mt-2">
-                    <button class="bg-white text-black font-bold text-[1rem] py-2.5 px-6 rounded-full hover:bg-gray-200 transition-colors w-full mt-8">
-                        Crear cuenta
-                    </button>
-                </div>
+                    <div class="mt-2">
+                        <p id="error-message" class="text-red-400 text-[0.9rem] text-center font-medium hidden mb-2"></p>
+                        
+                        <button id="submit-btn" type="submit" class="bg-white text-black font-bold text-[1rem] py-2.5 px-6 rounded-full hover:bg-gray-200 transition-colors w-full mt-8">
+                            <span id="btn-text">Crear cuenta</span>
+                        </button>
+                    </div>
+                </form>
             </section>
         </div>
     </main>
 </Layout>
 
-
 <script>
-    
+    import { actions } from "astro:actions";
+
+    const form = document.getElementById('signup-form') as HTMLFormElement;
+    const displaynameInput = document.getElementById('displayname') as HTMLInputElement;
+    const usernameInput = document.getElementById('username') as HTMLInputElement;
+    const emailInput = document.getElementById('email') as HTMLInputElement;
+    const passwordInput = document.getElementById('password') as HTMLInputElement;
+    const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
+    const btnText = document.getElementById('btn-text') as HTMLSpanElement;
+    const errorMessage = document.getElementById('error-message') as HTMLParagraphElement;
+
+    form?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        errorMessage.classList.add('hidden');
+        submitBtn.disabled = true;
+        btnText.textContent = 'Creando cuenta...';
+
+        try {
+            const { data, error } = await actions.signup({
+                displayname: displaynameInput.value,
+                username: usernameInput.value,
+                email: emailInput.value,
+                password: passwordInput.value,
+            });
+
+            if (error) {
+                errorMessage.textContent = error.message;
+                errorMessage.classList.remove('hidden');
+                submitBtn.disabled = false;
+                btnText.textContent = 'Crear cuenta';
+                return;
+            }
+
+            if (data?.status === false) {
+                errorMessage.textContent = data.error || 'Error al registrar usuario';
+                errorMessage.classList.remove('hidden');
+                submitBtn.disabled = false;
+                btnText.textContent = 'Crear cuenta';
+                return;
+            }
+
+            if (data?.status === true) {
+                window.location.href = '/signin'; 
+            }
+
+        } catch (err) {
+            errorMessage.textContent = 'Ocurrió un error inesperado al crear la cuenta.';
+            errorMessage.classList.remove('hidden');
+            submitBtn.disabled = false;
+            btnText.textContent = 'Crear cuenta';
+        }
+    });
 </script>

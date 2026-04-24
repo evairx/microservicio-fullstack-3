@@ -1,5 +1,5 @@
 import { IconMessageCircle, IconShare3, IconHeart } from "@tabler/icons-preact";
-import { viewImage } from "../../stores/view-image"; // Asegúrate de que la ruta sea la correcta
+import { viewImage } from "../../stores/view-image"; 
 
 interface PostContent {
     type_content: "image" | "video" | string;
@@ -19,17 +19,13 @@ interface PostData {
     date: string;
 }
 
-// 1. Corrección y formato de la fecha
 function formatTimeAgo(dateString: string) {
-    // Reemplazamos el espacio por una "T" para que sea un estándar ISO válido en todos los navegadores
     const validDateString = dateString.replace(" ", "T");
     const postDate = new Date(validDateString);
     const now = new Date();
     const diffInSeconds = Math.floor((now.getTime() - postDate.getTime()) / 1000);
 
-    // Si hay un desajuste de reloj y da negativo, o si acaba de publicarse (0s)
     if (diffInSeconds <= 0) return "1s";
-    
     if (diffInSeconds < 60) return `${diffInSeconds}s`;
     
     const diffInMinutes = Math.floor(diffInSeconds / 60);
@@ -53,12 +49,8 @@ function formatTimeAgo(dateString: string) {
     return `${day} ${month} ${year}`;
 }
 
-// 5 y 6. Función para parsear URLs y Hashtags
 function formatPostText(text: string) {
-    // Esta expresión regular captura tanto URLs (http/https) como Hashtags (#)
     const regex = /(https?:\/\/[^\s]+|#[a-zA-Z0-9_áéíóúÁÉÍÓÚñÑ]+)/g;
-    
-    // Al hacer split con grupos de captura (), los separadores también se incluyen en el array resultante
     const parts = text.split(regex);
     
     return parts.map((part, index) => {
@@ -69,14 +61,14 @@ function formatPostText(text: string) {
                     href={part} 
                     target="_blank" 
                     rel="noopener noreferrer" 
-                    onClick={(e) => e.stopPropagation()} // Evita que se abra el post completo
+                    onClick={(e) => e.stopPropagation()} 
                     class="text-[#1d9bf0] font-medium hover:underline"
                 >
                     {part}
                 </a>
             );
         } else if (part.startsWith('#')) {
-            const tag = part.slice(1); // Quitamos el '#' para la URL
+            const tag = part.slice(1);
             return (
                 <a 
                     key={index} 
@@ -88,26 +80,68 @@ function formatPostText(text: string) {
                 </a>
             );
         }
-        // Retornamos el texto normal
         return <span key={index}>{part}</span>;
     });
 }
 
+function FeedImageGallery({ images, onImageClick }: { images: PostContent[], onImageClick: (e: Event, src: string) => void }) {
+    if (!images || images.length === 0) return null;
+
+    if (images.length === 1) {
+        return (
+            <div class="mt-3">
+                <img
+                    src={images[0].content}
+                    onClick={(e) => onImageClick(e, images[0].content)}
+                    class="w-full max-h-[500px] object-cover rounded-xl border border-white/10 cursor-pointer hover:opacity-90 transition-opacity"
+                    loading="lazy"
+                />
+            </div>
+        );
+    }
+
+    return (
+        <div class={`mt-3 grid gap-0.5 rounded-xl overflow-hidden border border-white/10 ${
+            images.length === 2 ? 'grid-cols-2 aspect-[2/1]' : 'grid-cols-2 grid-rows-2 aspect-[16/9] sm:aspect-[3/2]'
+        }`}>
+            {images.slice(0, 4).map((img, index) => {
+                const isThreeLayoutFirst = images.length === 3 && index === 0;
+                
+                return (
+                    <div 
+                        key={index} 
+                        class={`relative w-full h-full bg-white/5 ${isThreeLayoutFirst ? 'row-span-2' : ''}`}
+                        onClick={(e) => onImageClick(e, img.content)}
+                    >
+                        <img
+                            src={img.content}
+                            class="absolute inset-0 w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                            loading="lazy"
+                        />
+                        
+                        {images.length > 4 && index === 3 && (
+                            <div class="absolute inset-0 bg-black/60 flex items-center justify-center text-white text-3xl font-bold cursor-pointer hover:bg-black/70 transition-colors">
+                                +{images.length - 4}
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
 export function Post({ post }: { post: PostData }) {
-    
-    // 2. Navegación al post completo
     const handlePostClick = () => {
         window.location.href = `/post/${post.id}`;
     };
 
-    // 4. Integración del Nanostore al dar click a la imagen
     const handleImageClick = (e: Event, src: string) => {
-        e.stopPropagation(); // Evitamos ir a la vista del post si dimos click a la imagen
+        e.stopPropagation(); 
         viewImage.set({ show: true, src: src });
     };
 
-    // Solo extraemos la primera imagen para cumplir con tu regla de "no a varias"
-    const firstImage = post.contents?.find(media => media.type_content === "image");
+    const images = post.contents?.filter(media => media.type_content === "image") || [];
 
     return (
         <article 
@@ -115,7 +149,6 @@ export function Post({ post }: { post: PostData }) {
             class="p-5 sm:p-6 border border-white/4 rounded-lg hover:bg-white/[0.03] transition-colors cursor-pointer"
         >
             <div class="flex items-start gap-4">
-                {/* 3. Click en el avatar para ir al perfil (opcional, pero buena práctica) */}
                 <a href={`/profile/${post.username}`} onClick={(e) => e.stopPropagation()} class="shrink-0">
                     <img
                         class="w-[50px] h-[50px] rounded-full mt-1 object-cover hover:opacity-80 transition-opacity"
@@ -125,10 +158,8 @@ export function Post({ post }: { post: PostData }) {
                 </a>
                 
                 <div class="w-full min-w-0">
-                    {/* Cabecera del usuario y fecha */}
                     <div>
                         <div class="flex flex-wrap items-center gap-x-2">
-                            {/* 3. Click en el nombre para ir al perfil */}
                             <a 
                                 href={`/profile/${post.username}`} 
                                 onClick={(e) => e.stopPropagation()}
@@ -139,7 +170,6 @@ export function Post({ post }: { post: PostData }) {
                             
                             <span class="text-white/50 text-[.95rem]">·</span>
                             
-                            {/* 1. Fecha al lado del displayname */}
                             <span class="text-white/50 text-[.95rem]">
                                 {formatTimeAgo(post.date)}
                             </span>
@@ -149,25 +179,12 @@ export function Post({ post }: { post: PostData }) {
                         </p>
                     </div>
 
-                    {/* Texto formateado con menciones y urls (mantiene el whitespace-pre-wrap para los saltos de linea) */}
                     <div class="mt-3 text-[1.10rem] text-white/90 font-normal leading-relaxed whitespace-pre-wrap break-words">
                         <p>{formatPostText(post.comment_text)}</p>
                     </div>
 
-                    {/* 4. Renderizamos únicamente la primera imagen, si existe */}
-                    {firstImage && (
-                        <div class="mt-4">
-                            <img
-                                src={firstImage.content}
-                                alt="Imagen adjunta al post"
-                                onClick={(e) => handleImageClick(e, firstImage.content)}
-                                class="w-full max-h-[500px] object-cover rounded-xl border border-white/10 hover:opacity-90 transition-opacity"
-                                loading="lazy"
-                            />
-                        </div>
-                    )}
+                    <FeedImageGallery images={images} onImageClick={handleImageClick} />
 
-                    {/* Botones de interacción con stopPropagation() para que no abran el post */}
                     <div class="w-full mt-5 flex gap-8">
                         <button 
                             onClick={(e) => e.stopPropagation()} 
