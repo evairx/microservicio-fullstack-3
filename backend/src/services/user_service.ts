@@ -3,11 +3,13 @@ import { Context } from "hono";
 import { z } from "zod";
 
 const signUpSchema = z.object({
-    name: z.string().min(1, "Falta el nombre"),
+    displayname: z.string().min(1, "Falta el nombre para mostrar"),
+    username: z.string().min(1, "Falta el nombre de usuario"),
     email: z.string().email("El correo electrónico no es válido"),
-    password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres")
-}).refine(data => !data.name.toLowerCase().includes(data.password.toLowerCase()), {
-    message: "El nombre no puede contener la contraseña",
+    password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
+    isprivate: z.boolean()
+}).refine(data => !data.username.toLowerCase().includes(data.password.toLowerCase()), {
+    message: "El nombre de usuario no puede contener la contraseña",
 });
 
 async function signUp(c: Context) {
@@ -20,9 +22,9 @@ async function signUp(c: Context) {
             return c.json({ error: "Campo JSON Body vacio" }, 400)
         }
         
-        const { name, email, password } = body;
+        const { displayname, username, email, password, isprivate } = body;
 
-        if(!name || !email || !password) return c.json({ error: "Faltan campos requeridos" }, 400)
+        if(!displayname || !username || !email || !password || isprivate === undefined) return c.json({ error: "Faltan campos requeridos" }, 400)
 
         const parsed = signUpSchema.safeParse(body);
 
@@ -32,11 +34,11 @@ async function signUp(c: Context) {
         
         if(!userRepo) return c.json({ error: "No se pudo conectar a la base de datos" }, 500)
         
-        const res = await userRepo.signUp({ name, email, password });
+        const res = await userRepo.signUp({ displayname, username, email, password, isprivate });
 
         if(!res.success) return c.json({ error: res.message }, 400)
         
-        return c.json({ user: res.user }, 201)
+        return c.json({ message: "Usuario creado exitosamente" }, 200)
     } catch (err) {
         return c.json({ error: "Hubo un error al crear el usuario" }, 500)
     }
@@ -98,7 +100,7 @@ async function refreshToken(c: Context) {
     }
 }
 
-async function profile(c: Context) {
+async function account(c: Context) {
     try {
         const jwttoken = c.req.header("Authorization")?.replace("Bearer ", "");
         if(!jwttoken) return c.json({ error: "Token de autorización no proporcionado" }, 401)
@@ -106,7 +108,7 @@ async function profile(c: Context) {
         const userRepo = await userRepository()
         if(!userRepo) return c.json({ error: "No se pudo conectar a la base de datos" }, 500)
             
-        const res = await userRepo.profile({ jwttoken });
+        const res = await userRepo.account({ jwttoken });
         if(!res.success) return c.json({ error: res.message }, 400)
 
         return c.json({ user: res }, 200)
@@ -118,6 +120,6 @@ async function profile(c: Context) {
 export const UserService = {
     signUp,
     signIn,
-    profile,
-    refreshToken
+    refreshToken,
+    account,
 }

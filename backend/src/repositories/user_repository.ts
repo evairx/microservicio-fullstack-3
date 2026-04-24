@@ -16,11 +16,15 @@ export async function userRepository() {
                 `CREATE TABLE IF NOT EXISTS users (
                     id TEXT PRIMARY KEY,
                     avatar TEXT,
-                    name TEXT,
+                    displayname TEXT NOT NULL,
+                    username TEXT NOT NULL UNIQUE,
                     email TEXT NOT NULL UNIQUE,
+                    isprivate BOOLEAN DEFAULT FALSE,
                     password TEXT NOT NULL
                 );
-                INDEX IF NOT EXISTS idx_users_email ON users (email);
+                CREATE INDEX IF NOT EXISTS idx_users_id ON users (id);
+                CREATE INDEX IF NOT EXISTS idx_users_username ON users (username);
+                CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
                 `,
                 `
                 CREATE TABLE IF NOT EXISTS auth (
@@ -32,25 +36,21 @@ export async function userRepository() {
                     expires_at DATETIME NOT NULL,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 );
-                INDEX IF NOT EXISTS idx_auth_id ON auth (id);
-                INDEX IF NOT EXISTS idx_auth_refresh_token ON auth (refresh_token);
-                INDEX IF NOT EXISTS idx_auth_user_id ON auth (user_id);
-                INDEX IF NOT EXISTS idx_auth_signature ON auth (signature);
-                `,
-                {
-                    sql: `INSERT OR IGNORE INTO users (id, avatar, name, email, password) VALUES (?, ?, ?, ?, ?)`,
-                    args: [uuidv4(), randomGenAvatar(), "Pepito", "pepito@gmail.com", await bcrypt.hash("password123", salt)],
-                }
+                CREATE INDEX IF NOT EXISTS idx_auth_id ON auth (id);
+                CREATE INDEX IF NOT EXISTS idx_auth_refresh_token ON auth (refresh_token);
+                CREATE INDEX IF NOT EXISTS idx_auth_user_id ON auth (user_id);
+                CREATE INDEX IF NOT EXISTS idx_auth_signature ON auth (signature);
+                `
             ],
             "write",
         )
 
         return {
-            async signUp({ name, email, password }: { name: string, email: string, password: string }) {
+            async signUp({ displayname, username, email, password, isprivate  }: { displayname: string, username: string, email: string, password: string, isprivate: boolean }) {
                 try {
                     const result = await client.execute({
-                        sql: `INSERT INTO users (id, avatar, name, email, password) VALUES (?, ?, ?, ?, ?) RETURNING id, avatar, name, email`,
-                        args: [uuidv4(), randomGenAvatar(), name, email, await bcrypt.hash(password, salt)]
+                        sql: `INSERT INTO users (id, avatar, displayname, username, email, password, isprivate) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id, avatar, displayname, username, email`,
+                        args: [uuidv4(), randomGenAvatar(), displayname, username, email, await bcrypt.hash(password, salt), isprivate]
                     })
 
                     return { success: true, user: result.rows[0] };
@@ -168,7 +168,7 @@ export async function userRepository() {
                     return { success: false, message: "Error al iniciar sesión" };
                 }
             },
-            async profile({ jwttoken }: { jwttoken: string }) {
+            async account({ jwttoken }: { jwttoken: string }) {
                 try {
                     if(!process.env.JWT_SECRET) return { success: false, message: "jwt secret no configurado" };
 
