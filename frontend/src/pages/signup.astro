@@ -1,0 +1,77 @@
+---
+import Layout from '../layouts/main.astro';
+
+import { IconArrowNarrowLeft, IconUserFilled, IconAt, IconMailFilled, IconLockFilled } from '@tabler/icons-preact';
+---
+
+<Layout title="Crea una cuenta — Pterodactweet">
+    <main class="bg-[#131313] min-h-screen">
+        <div class="relative flex justify-center w-full max-w-[1200px] mx-auto min-h-screen">
+            <aside class="absolute left-0 top-8 w-[240px] hidden lg:flex flex-col gap-8">
+                <a href="/">
+                    <div class="flex items-center gap-2 hover:scale-[1.10] transition-transform duration-200 cursor-pointer">
+                        <IconArrowNarrowLeft class="w-[28px] h-[28px] text-white cursor-pointer" />
+                        <h2 class="text-white text-[1.1rem] font-bold leading-tight tracking-wide">
+                            Volver al inicio
+                        </h2>
+                    </div>
+                </a>
+            </aside>
+
+            <section class="w-full flex flex-col items-center justify-center  max-w-[550px] min-h-screen border-x border-white/5 px-3 pb-20">
+                <img 
+                    class="w-[100px] h-[55px] object-contain"
+                    src="/logo.webp"
+                    alt="Logo"
+                />
+                <h1 class="mt-5 text-[1.6rem] font-medium text-white">Crea una cuenta</h1>
+                <p class="mt-1 text-[.98rem] text-white/70">Únete a pterodactweet la plataforma de los dinosaurios</p>
+
+                <div class="mt-10 flex flex-col gap-5 w-[350px]">
+                    <label for="displayname" class="text-white/60 text-[1rem] font-medium relative">
+                        Nombre en pantalla
+                        <div class="absolute top-[71%] left-5 transform translate-y-[-50%] text-white/60 pointer-events-none">
+                            <IconUserFilled class="w-[20px] h-[20px]" />
+                        </div>
+                        <input type="text" class="bg-white/5 w-full rounded-full py-[.650rem] text-white px-12 mt-3 border-2 border-white/30  focus:border-white/60 focus:outline-none transition-colors" />
+                    </label>
+
+                    <label for="username" class="text-white/60 text-[1rem] font-medium relative">
+                        Nombre de usuario
+                        <div class="absolute top-[71%] left-5 transform translate-y-[-50%] text-white/60 pointer-events-none">
+                            <IconAt class="w-[20px] h-[20px]" />
+                        </div>
+                        <input type="text" class="bg-white/5 w-full rounded-full py-[.650rem] text-white px-12 mt-3 border-2 border-white/30  focus:border-white/60 focus:outline-none transition-colors" />
+                    </label>
+
+                    <label for="email" class="text-white/60 text-[1rem] font-medium relative">
+                        Correo electrónico
+                        <div class="absolute top-[71%] left-5 transform translate-y-[-50%] text-white/60 pointer-events-none">
+                            <IconMailFilled class="w-[20px] h-[20px]" />
+                        </div>
+                        <input type="email" class="bg-white/5 w-full rounded-full py-[.650rem] text-white px-12 mt-3 border-2 border-white/30  focus:border-white/60 focus:outline-none transition-colors" />
+                    </label>
+
+                    <label for="password" class="text-white/60 text-[1rem] font-medium relative">
+                        Contraseña
+                        <div class="absolute top-[71%] left-5 transform translate-y-[-50%] text-white/60 pointer-events-none">
+                            <IconLockFilled class="w-[20px] h-[20px]" />
+                        </div>
+                        <input type="password" class="bg-white/5 w-full rounded-full py-[.650rem] text-white px-12 mt-3 border-2 border-white/30  focus:border-white/60 focus:outline-none transition-colors" />
+                    </label>
+                </div>
+
+                <div class="mt-2">
+                    <button class="bg-white text-black font-bold text-[1rem] py-2.5 px-6 rounded-full hover:bg-gray-200 transition-colors w-full mt-8">
+                        Crear cuenta
+                    </button>
+                </div>
+            </section>
+        </div>
+    </main>
+</Layout>
+
+
+<script>
+    
+</script>

@@ -1,0 +1,25 @@
+---
+import { TextAreaPost } from './form-new.tsx';
+async function isLogin() {
+    try {
+        const sid = Astro.cookies.get("sid")?.value;
+        const rid = Astro.cookies.get("rid")?.value;
+
+        if (!sid || !rid) {
+            return { login: false };
+        }
+
+        return { login: true , sid};
+    } catch (e) {
+        return { login: false };
+    }
+}
+
+const { login, sid} = await isLogin();
+---
+
+{
+    login && (
+        <TextAreaPost sid={sid} client:only/>
+    )
+}

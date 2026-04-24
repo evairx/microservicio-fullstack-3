@@ -16,6 +16,8 @@ export async function userRepository() {
                 `CREATE TABLE IF NOT EXISTS users (
                     id TEXT PRIMARY KEY,
                     avatar TEXT,
+                    banner TEXT,
+                    description TEXT,
                     displayname TEXT NOT NULL,
                     username TEXT NOT NULL UNIQUE,
                     email TEXT NOT NULL UNIQUE,
@@ -26,8 +28,7 @@ export async function userRepository() {
                 CREATE INDEX IF NOT EXISTS idx_users_username ON users (username);
                 CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
                 `,
-                `
-                CREATE TABLE IF NOT EXISTS auth (
+                `CREATE TABLE IF NOT EXISTS auth (
                     id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
                     refresh_token TEXT NOT NULL,
@@ -40,22 +41,32 @@ export async function userRepository() {
                 CREATE INDEX IF NOT EXISTS idx_auth_refresh_token ON auth (refresh_token);
                 CREATE INDEX IF NOT EXISTS idx_auth_user_id ON auth (user_id);
                 CREATE INDEX IF NOT EXISTS idx_auth_signature ON auth (signature);
+                `,
+                `CREATE TABLE IF NOT EXISTS followers (
+                    follower_id TEXT NOT NULL,
+                    following_id TEXT NOT NULL,
+                    date DATETIME NOT NULL,
+                    PRIMARY KEY (follower_id, following_id),
+                    FOREIGN KEY (follower_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (following_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_followers_follower_id ON followers (follower_id);
+                CREATE INDEX IF NOT EXISTS idx_followers_following_id ON followers (following_id);
                 `
             ],
             "write",
         )
 
         return {
-            async signUp({ displayname, username, email, password, isprivate  }: { displayname: string, username: string, email: string, password: string, isprivate: boolean }) {
+            async signUp({ displayname, username, email, password, isprivate }: { displayname: string, username: string, email: string, password: string, isprivate: boolean }) {
                 try {
                     const result = await client.execute({
-                        sql: `INSERT INTO users (id, avatar, displayname, username, email, password, isprivate) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id, avatar, displayname, username, email`,
+                        sql: `INSERT INTO users (id, avatar, banner, description, displayname, username, email, password, isprivate) VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?) RETURNING id, avatar, displayname, username, email`,
                         args: [uuidv4(), randomGenAvatar(), displayname, username, email, await bcrypt.hash(password, salt), isprivate]
                     })
 
                     return { success: true, user: result.rows[0] };
                 } catch (error) {
-                    console.error("Error al registrar usuario:", error);
                     return { success: false, message: "Error al registrar usuario" };
                 }
             },
@@ -107,7 +118,6 @@ export async function userRepository() {
                     return { success: true, token: token, refreshToken: refreshToken, expiresIn: 3600 };
 
                 } catch (err) {
-                    console.error("Error al iniciar sesión:", err);
                     return { success: false, message: "Error al iniciar sesión" };
                 }
             },
@@ -164,7 +174,6 @@ export async function userRepository() {
 
                     return { success: true, token: token, refreshToken: newRefresh, expiresIn: 3600 };
                 } catch (err) {
-                    console.error("Error al iniciar sesión:", err);
                     return { success: false, message: "Error al iniciar sesión" };
                 }
             },
@@ -181,7 +190,7 @@ export async function userRepository() {
                     const decode = jwt.verify(jwttoken, process.env.JWT_SECRET) as { session: string };
                     const session = decode.session;
 
-                    const usertoken = jwt.decode(session) as { user: number, auth: string };
+                    const usertoken = jwt.decode(session) as { user: string, auth: string };
 
                     const user = await client.execute({
                         sql: `SELECT * FROM users WHERE id = ?`,
@@ -206,12 +215,14 @@ export async function userRepository() {
 
                     return { 
                         success: true, 
-                        name: userData.name, 
+                        displayname: userData.displayname,
+                        username: userData.username,
                         avatar: userData.avatar, 
+                        banner: userData.banner,
+                        description: userData.description,
                         email: userData.email 
                     };
                 } catch (err) {
-                    console.error("Error al iniciar sesión:", err);
                     return { success: false, message: "Error al iniciar sesión" };
                 }
             }

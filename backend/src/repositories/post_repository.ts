@@ -98,26 +98,23 @@ export async function postRepository() {
                 try {
                     if (!process.env.JWT_SECRET) return { success: false, message: "jwt secret no configurado" };
 
-                    const token = jwt.decode(jwttoken) as { userId: number, exp: number };
-
-                    if (token.exp < Math.floor(Date.now() / 1000)) {
-                        return { success: false, message: "el Token ha expirado" };
+                    let usertoken, session;
+                    try {
+                        const decode = jwt.verify(jwttoken, process.env.JWT_SECRET) as { session: string };
+                        session = decode.session;
+                        usertoken = jwt.decode(session) as { user: string, auth: string };
+                    } catch (e) {
+                        return { success: false, message: "Token inválido o expirado" };
                     }
 
-                    const decode = jwt.verify(jwttoken, process.env.JWT_SECRET) as { session: string };
-                    const session = decode.session;
-
-                    const usertoken = jwt.decode(session) as { user: string, auth: string };
-
-                    const auth = await client.execute({
-                        sql: `SELECT signature FROM auth WHERE id = ?`,
-                        args: [usertoken.auth]
-                    });
-
+                    const auth = await client.execute({ sql: `SELECT signature FROM auth WHERE id = ?`, args: [usertoken.auth] });
                     if (auth.rows.length === 0) return { success: false, message: "Sesión no encontrada" };
 
-                    const signature = auth.rows[0].signature as string;
-                    jwt.verify(session, signature);
+                    try {
+                        jwt.verify(session, auth.rows[0].signature as string);
+                    } catch (e) {
+                        return { success: false, message: "Firma de sesión inválida" };
+                    }
 
                     const postId = uuidv4();
                     
@@ -131,13 +128,12 @@ export async function postRepository() {
                             sql: `INSERT INTO post_content (id, post_id, type_content, content) VALUES (?, ?, ?, ?)`,
                             args: [uuidv4(), postId, c.type_content, c.content]
                         }));
-                        
                         await client.batch(queries, "write");
                     }
 
                     return { success: true, message: "Post creado con éxito", post_id: postId };
-
                 } catch (err) {
+                    console.error("Error en AddPost:", err);
                     return { success: false, message: "Error al crear el post" };
                 }
             },
@@ -146,28 +142,15 @@ export async function postRepository() {
                 try {
                     const result = await client.execute(`
                         SELECT 
-                            p.id,
-                            u.displayname,
-                            u.username,
-                            u.avatar,
-                            p.content_text AS comment_text,
-                            p.published_date AS date,
+                            p.id, u.displayname, u.username, u.avatar, p.content_text AS comment_text, p.published_date AS date,
                             (SELECT COUNT(*) FROM post_likes WHERE post_id = p.id) AS likes,
                             (SELECT COUNT(*) FROM post_comment WHERE post_id = p.id) AS comments,
                             (SELECT COUNT(*) FROM post_shared WHERE post_id = p.id) AS shared,
-                            (
-                                SELECT json_group_array(
-                                    json_object(
-                                        'type_content', pc.type_content, 
-                                        'content', pc.content
-                                    )
-                                ) 
-                                FROM post_content pc 
-                                WHERE pc.post_id = p.id
-                            ) AS contents
+                            (SELECT json_group_array(json_object('type_content', pc.type_content, 'content', pc.content)) 
+                             FROM post_content pc WHERE pc.post_id = p.id) AS contents
                         FROM posts p
                         JOIN users u ON p.user_id = u.id
-                        WHERE p.public = 1
+                        WHERE p.public = 1 AND u.isprivate = 0
                         ORDER BY p.published_date DESC
                         LIMIT 50;
                     `);
@@ -176,42 +159,29 @@ export async function postRepository() {
 
                     const posts = result.rows.map(row => {
                         let parsedContents = [];
-                        
                         if (row.contents && typeof row.contents === 'string') {
                             const parsed = JSON.parse(row.contents);
-                            if (parsed.length > 0 && parsed[0].type_content !== null) {
-                                parsedContents = parsed;
-                            }
+                            if (parsed.length > 0 && parsed[0].type_content !== null) parsedContents = parsed;
                         }
-
                         return {
-                            id: row.id as string,
-                            displayname: row.displayname as string,
-                            username: row.username as string,
-                            avatar: row.avatar as string | null,
-                            comment_text: row.comment_text as string | null,
-                            contents: parsedContents,
-                            likes: row.likes as number,
-                            comments: row.comments as number,
-                            shared: row.shared as number,
-                            date: row.date as string
+                            id: row.id as string, displayname: row.displayname as string, username: row.username as string,
+                            avatar: row.avatar as string | null, comment_text: row.comment_text as string | null,
+                            contents: parsedContents, likes: row.likes as number, comments: row.comments as number,
+                            shared: row.shared as number, date: row.date as string
                         };
                     });
-
                     return posts;
-
                 } catch (err) {
+                    console.error("Error en GetPosts:", err);
                     return [];
                 }
             },
 
-            async GetPostById({ id }: { id: string }) {
+            async GetPostById({ id, jwttoken }: { id: string, jwttoken?: string }) {
                 try {
                     const postQuery = await client.execute({
-                        sql: `SELECT p.id, p.content_text, p.published_date, u.displayname, u.username, u.avatar 
-                              FROM posts p 
-                              JOIN users u ON p.user_id = u.id 
-                              WHERE p.id = ?`,
+                        sql: `SELECT p.id, p.content_text, p.published_date, p.public, p.user_id, u.displayname, u.username, u.avatar, u.isprivate 
+                              FROM posts p JOIN users u ON p.user_id = u.id WHERE p.id = ?`,
                         args: [id]
                     });
 
@@ -219,77 +189,56 @@ export async function postRepository() {
 
                     const post = postQuery.rows[0];
 
-                    const contentsQuery = await client.execute({
-                        sql: `SELECT type_content, content FROM post_content WHERE post_id = ?`,
-                        args: [id]
-                    });
+                    let loggedInUserId = null;
+                    if (jwttoken && process.env.JWT_SECRET) {
+                        try {
+                            const decode = jwt.verify(jwttoken, process.env.JWT_SECRET) as { session: string };
+                            const session = decode.session;
+                            const usertoken = jwt.decode(session) as { user: string, auth: string };
+                            const auth = await client.execute({ sql: `SELECT signature FROM auth WHERE id = ?`, args: [usertoken.auth] });
+                            if (auth.rows.length > 0) {
+                                jwt.verify(session, auth.rows[0].signature as string);
+                                loggedInUserId = usertoken.user;
+                            }
+                        } catch (e) {}
+                    }
 
-                    const likesQuery = await client.execute({
-                        sql: `SELECT u.displayname, u.username, u.avatar, pl.date 
-                              FROM post_likes pl 
-                              JOIN users u ON pl.user_id = u.id 
-                              WHERE pl.post_id = ?`,
-                        args: [id]
-                    });
+                    if (post.public === 0 || post.isprivate === 1) {
+                        if (!loggedInUserId) return { success: false, is_private: true, message: "Este post es privado" };
+                        
+                        if (loggedInUserId !== post.user_id) {
+                            const follows = await client.execute({
+                                sql: `SELECT 1 FROM followers WHERE follower_id = ? AND following_id = ?`,
+                                args: [loggedInUserId, post.user_id]
+                            });
+                            if (follows.rows.length === 0) {
+                                return { success: false, is_private: true, message: "Este post es privado" };
+                            }
+                        }
+                    }
 
-                    const sharedQuery = await client.execute({
-                        sql: `SELECT u.displayname, u.username, u.avatar, ps.date 
-                              FROM post_shared ps 
-                              JOIN users u ON ps.user_id = u.id 
-                              WHERE ps.post_id = ?`,
-                        args: [id]
-                    });
-
-                    const commentsQuery = await client.execute({
-                        sql: `SELECT c.id, c.comment_text, c.date, u.displayname, u.username, u.avatar 
-                              FROM post_comment c 
-                              JOIN users u ON c.user_id = u.id 
-                              WHERE c.post_id = ? 
-                              ORDER BY c.date DESC`,
-                        args: [id]
-                    });
+                    const contentsQuery = await client.execute({ sql: `SELECT type_content, content FROM post_content WHERE post_id = ?`, args: [id] });
+                    const likesQuery = await client.execute({ sql: `SELECT u.displayname, u.username, u.avatar, pl.date FROM post_likes pl JOIN users u ON pl.user_id = u.id WHERE pl.post_id = ?`, args: [id] });
+                    const sharedQuery = await client.execute({ sql: `SELECT u.displayname, u.username, u.avatar, ps.date FROM post_shared ps JOIN users u ON ps.user_id = u.id WHERE ps.post_id = ?`, args: [id] });
+                    const commentsQuery = await client.execute({ sql: `SELECT c.id, c.comment_text, c.date, u.displayname, u.username, u.avatar FROM post_comment c JOIN users u ON c.user_id = u.id WHERE c.post_id = ? ORDER BY c.date DESC`, args: [id] });
 
                     const commentsList = await Promise.all(commentsQuery.rows.map(async (cRow) => {
-                        const cContents = await client.execute({
-                            sql: `SELECT type_content, content FROM post_comment_content WHERE comment_id = ?`,
-                            args: [cRow.id as string]
-                        });
-                        return {
-                            id: cRow.id,
-                            displayname: cRow.displayname,
-                            username: cRow.username,
-                            avatar: cRow.avatar,
-                            comment_text: cRow.comment_text,
-                            date: cRow.date,
-                            contents: cContents.rows
-                        };
+                        const cContents = await client.execute({ sql: `SELECT type_content, content FROM post_comment_content WHERE comment_id = ?`, args: [cRow.id as string] });
+                        return { id: cRow.id, displayname: cRow.displayname, username: cRow.username, avatar: cRow.avatar, comment_text: cRow.comment_text, date: cRow.date, contents: cContents.rows };
                     }));
 
                     return {
                         success: true,
                         post: {
-                            id: post.id,
-                            displayname: post.displayname,
-                            username: post.username,
-                            avatar: post.avatar,
-                            comment_text: post.content_text,
-                            date: post.published_date,
-                            contents: contentsQuery.rows,
-                            likes: {
-                                count: likesQuery.rows.length,
-                                liked_users: likesQuery.rows
-                            },
-                            comments: {
-                                count: commentsQuery.rows.length,
-                                comment_list: commentsList
-                            },
-                            shared: {
-                                count: sharedQuery.rows.length,
-                                shared_users: sharedQuery.rows
-                            }
+                            id: post.id, displayname: post.displayname, username: post.username, avatar: post.avatar,
+                            comment_text: post.content_text, date: post.published_date, contents: contentsQuery.rows,
+                            likes: { count: likesQuery.rows.length, liked_users: likesQuery.rows },
+                            comments: { count: commentsQuery.rows.length, comment_list: commentsList },
+                            shared: { count: sharedQuery.rows.length, shared_users: sharedQuery.rows }
                         }
                     };
                 } catch (err) {
+                    console.error("Error en GetPostById:", err);
                     return { success: false, message: "Error al obtener el post" };
                 }
             },
@@ -298,49 +247,38 @@ export async function postRepository() {
                 try {
                     if (!process.env.JWT_SECRET) return { success: false, message: "jwt secret no configurado" };
 
-                    const token = jwt.decode(jwttoken) as { userId: number, exp: number };
-                    if (token.exp < Math.floor(Date.now() / 1000)) return { success: false, message: "el Token ha expirado" };
+                    let usertoken, session;
+                    try {
+                        const decode = jwt.verify(jwttoken, process.env.JWT_SECRET) as { session: string };
+                        session = decode.session;
+                        usertoken = jwt.decode(session) as { user: string, auth: string };
+                    } catch (e) {
+                        return { success: false, message: "Token inválido o expirado" };
+                    }
 
-                    const decode = jwt.verify(jwttoken, process.env.JWT_SECRET) as { session: string };
-                    const session = decode.session;
-                    const usertoken = jwt.decode(session) as { user: string, auth: string };
-
-                    const auth = await client.execute({
-                        sql: `SELECT signature FROM auth WHERE id = ?`,
-                        args: [usertoken.auth]
-                    });
-
+                    const auth = await client.execute({ sql: `SELECT signature FROM auth WHERE id = ?`, args: [usertoken.auth] });
                     if (auth.rows.length === 0) return { success: false, message: "Sesión no encontrada" };
 
-                    const signature = auth.rows[0].signature as string;
-                    jwt.verify(session, signature);
+                    try {
+                        jwt.verify(session, auth.rows[0].signature as string);
+                    } catch (e) {
+                        return { success: false, message: "Firma de sesión inválida" };
+                    }
 
-                    const postCheck = await client.execute({
-                        sql: `SELECT id FROM posts WHERE id = ?`,
-                        args: [post_id]
-                    });
-
+                    const postCheck = await client.execute({ sql: `SELECT id FROM posts WHERE id = ?`, args: [post_id] });
                     if (postCheck.rows.length === 0) return { success: false, message: "Post no encontrado" };
 
-                    const likeCheck = await client.execute({
-                        sql: `SELECT id FROM post_likes WHERE post_id = ? AND user_id = ?`,
-                        args: [post_id, usertoken.user]
-                    });
+                    const likeCheck = await client.execute({ sql: `SELECT id FROM post_likes WHERE post_id = ? AND user_id = ?`, args: [post_id, usertoken.user] });
 
                     if (likeCheck.rows.length > 0) {
-                        await client.execute({
-                            sql: `DELETE FROM post_likes WHERE post_id = ? AND user_id = ?`,
-                            args: [post_id, usertoken.user]
-                        });
+                        await client.execute({ sql: `DELETE FROM post_likes WHERE post_id = ? AND user_id = ?`, args: [post_id, usertoken.user] });
                         return { success: true, message: "Like removido" };
                     } else {
-                        await client.execute({
-                            sql: `INSERT INTO post_likes (id, post_id, user_id, date) VALUES (?, ?, ?, datetime('now'))`,
-                            args: [uuidv4(), post_id, usertoken.user]
-                        });
+                        await client.execute({ sql: `INSERT INTO post_likes (id, post_id, user_id, date) VALUES (?, ?, ?, datetime('now'))`, args: [uuidv4(), post_id, usertoken.user] });
                         return { success: true, message: "Like añadido" };
                     }
                 } catch (err) {
+                    console.error("Error en ToggleLike:", err);
                     return { success: false, message: "Error al procesar el like" };
                 }
             },
@@ -349,49 +287,40 @@ export async function postRepository() {
                 try {
                     if (!process.env.JWT_SECRET) return { success: false, message: "jwt secret no configurado" };
 
-                    const token = jwt.decode(jwttoken) as { userId: number, exp: number };
-                    if (token.exp < Math.floor(Date.now() / 1000)) return { success: false, message: "el Token ha expirado" };
+                    let usertoken, session;
+                    try {
+                        const decode = jwt.verify(jwttoken, process.env.JWT_SECRET) as { session: string };
+                        session = decode.session;
+                        usertoken = jwt.decode(session) as { user: string, auth: string };
+                    } catch (e) {
+                        return { success: false, message: "Token inválido o expirado" };
+                    }
 
-                    const decode = jwt.verify(jwttoken, process.env.JWT_SECRET) as { session: string };
-                    const session = decode.session;
-                    const usertoken = jwt.decode(session) as { user: string, auth: string };
-
-                    const auth = await client.execute({
-                        sql: `SELECT signature FROM auth WHERE id = ?`,
-                        args: [usertoken.auth]
-                    });
-
+                    const auth = await client.execute({ sql: `SELECT signature FROM auth WHERE id = ?`, args: [usertoken.auth] });
                     if (auth.rows.length === 0) return { success: false, message: "Sesión no encontrada" };
 
-                    const signature = auth.rows[0].signature as string;
-                    jwt.verify(session, signature);
+                    try {
+                        jwt.verify(session, auth.rows[0].signature as string);
+                    } catch (e) {
+                        return { success: false, message: "Firma de sesión inválida" };
+                    }
 
-                    const postCheck = await client.execute({
-                        sql: `SELECT id FROM posts WHERE id = ?`,
-                        args: [post_id]
-                    });
-
+                    const postCheck = await client.execute({ sql: `SELECT id FROM posts WHERE id = ?`, args: [post_id] });
                     if (postCheck.rows.length === 0) return { success: false, message: "Post no encontrado" };
 
                     const commentId = uuidv4();
-                    
-                    await client.execute({
-                        sql: `INSERT INTO post_comment (id, post_id, user_id, comment_text, date) VALUES (?, ?, ?, ?, datetime('now'))`,
-                        args: [commentId, post_id, usertoken.user, comment_text]
-                    });
+                    await client.execute({ sql: `INSERT INTO post_comment (id, post_id, user_id, comment_text, date) VALUES (?, ?, ?, ?, datetime('now'))`, args: [commentId, post_id, usertoken.user, comment_text] });
 
                     if (contents.length > 0) {
                         const queries = contents.map(c => ({
                             sql: `INSERT INTO post_comment_content (id, post_id, user_id, comment_id, type_content, content, date) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
                             args: [uuidv4(), post_id, usertoken.user, commentId, c.type_content, c.content]
                         }));
-                        
                         await client.batch(queries, "write");
                     }
-
                     return { success: true, message: "Comentario añadido con éxito", comment_id: commentId };
-
                 } catch (err) {
+                    console.error("Error en AddComment:", err);
                     return { success: false, message: "Error al crear el comentario" };
                 }
             }

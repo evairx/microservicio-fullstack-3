@@ -1,0 +1,76 @@
+---
+async function isLogin() {
+    try {
+        const sid = Astro.cookies.get("sid")?.value;
+        const rid = Astro.cookies.get("rid")?.value;
+
+        if (!sid || !rid) {
+            return { login: false };
+        }
+
+        const res = await fetch('http://localhost:3000/user/account', {
+            headers: {
+                'Authorization': `Bearer ${sid}`
+            }
+        })
+
+        if (!res.ok) {
+            return { login: false };
+        }
+
+        const data = await res.json();
+
+        return { login: true, user: data };
+    } catch (e) {
+        return { login: false };
+    }
+}
+
+const { login, user } = await isLogin();
+---
+
+{
+    login ? (
+        <aside class="fixed left-95 top-8 w-[260px] hidden lg:flex flex-col gap-1">
+            <div class="flex items-center gap-3">
+                <img 
+                    class="w-[60px] h-[55px] object-contain"
+                    src={user.user.avatar} 
+                    alt={user.user.displayname}
+                >
+                <p class="text-white font-medium">Bienvenido!,<br> {user.user.displayname}</p>
+            </div>
+        </aside>
+    ) : (
+        <aside class="fixed left-95 top-8 w-[240px] hidden lg:flex flex-col gap-8">
+            <div>
+                <img
+                    class="w-[100px] h-[55px] object-contain"
+                    src="/logo.webp"
+                    alt="Logo"
+                />
+            </div>
+
+            <div class="flex flex-col gap-5 mt-2">
+                <h2 class="text-white text-[1.4rem] font-bold leading-tight tracking-wide">
+                    Únete a la
+                    <br />
+                    conversación.
+                </h2>
+
+                <div class="flex flex-col gap-3 w-full">
+                    <a href="/signup">
+                        <button class="bg-white text-black font-bold text-[1rem] py-2.5 rounded-full hover:bg-gray-200 transition-colors w-full">
+                            Crear cuenta
+                        </button>
+                    </a>
+                    <a href="/signin">
+                        <button class="border border-white/20 text-white font-bold text-[1rem] py-2.5 rounded-full hover:bg-white/10 transition-colors w-full">
+                            Iniciar sesión
+                        </button>
+                    </a>
+                </div>
+            </div>
+        </aside>
+    )
+}

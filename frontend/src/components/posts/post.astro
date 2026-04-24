@@ -1,0 +1,53 @@
+---
+import { IconMessageCircle, IconShare3, IconHeart } from "@tabler/icons-preact";
+import { Post } from "./post.tsx";
+
+async function fetchPosts() {
+    try {
+        const res = await fetch("http://localhost:3000/posts");
+
+        if (!res.ok) {
+            return { error: true, posts: [] };
+        }
+
+        const posts = await res.json();
+        return { error: false, posts };
+    } catch (e) {
+        return { error: true, posts: [] };
+    }
+}
+
+const { error, posts } = await fetchPosts();
+---
+
+{
+    error ? (
+        <div class="flex flex-col gap-1 h-[80dvh] items-center justify-center">
+            <p class="text-white text-center p-4 text-[1.1rem]">
+                Hubo un error de conexión
+            </p>
+            <a
+                href="/"
+                class="bg-white text-black font-medium text-[1rem] py-2.5 px-4 rounded-full hover:bg-gray-200 transition-colors"
+            >
+                Recargar Posts
+            </a>
+        </div>
+    ) : posts.length === 0 ? (
+        <div class="flex flex-col gap-1 h-[80dvh] items-center justify-center">
+            <p class="text-white text-center p-4 text-[1.1rem]">
+                No hay publicaciones para mostrar
+            </p>
+            <a
+                href="/"
+                class="bg-white text-black font-medium text-[1rem] py-2.5 px-4 rounded-full hover:bg-gray-200 transition-colors"
+            >
+                Recargar Posts
+            </a>
+        </div>
+    ) : (
+        posts.map((post) => (
+           <Post post={post} client:only/>
+        ))
+    )
+}

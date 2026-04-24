@@ -1,0 +1,36 @@
+---
+import Layout from '../layouts/main.astro';
+import { IconHomeFilled, IconSearch } from '@tabler/icons-preact';
+
+import Aside from '../components/aside.astro';
+import Posts from '../components/posts/post.astro';
+import NewPost from '../components/posts/new.astro';
+---
+
+<Layout title="Inicio — Pterodactweet | La red social de los dinosaurios">
+    <main class="bg-[#131313] min-h-screen">
+        <div class="relative flex justify-center w-full max-w-[1200px] mx-auto min-h-screen">
+            <Aside server:defer/>
+
+            <section class="bg-[#181818] w-full max-w-[550px] min-h-screen border-x border-white/5 px-3 pb-20">
+                
+                <header class="w-full flex items-center justify-center pt-6 gap-5">
+                    <button class="bg-white w-[60px] h-[44px] rounded-full flex items-center justify-center cursor-pointer hover:scale-[1.10] transition-transform duration-200 shadow-sm">
+                        <IconHomeFilled class="w-[28px] h-[28px] text-black" />
+                    </button>
+                    <button class="bg-[#2a2a2a] w-[60px] h-[44px] rounded-full flex items-center justify-center cursor-pointer hover:scale-[1.10] transition-transform duration-200 hover:bg-[#333]">
+                        <IconSearch class="w-[24px] h-[24px] text-white" />
+                    </button>
+                </header>
+
+                <div class="mt-8 px-2 flex flex-col gap-6">
+                    <NewPost server:defer/>
+                    
+                    <Posts server:defer>
+						<p slot="fallback">cargando...</p>
+					</Posts>
+                </div>
+            </section>
+        </div>
+    </main>
+</Layout>

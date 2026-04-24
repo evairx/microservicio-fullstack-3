@@ -1,0 +1,28 @@
+{
+  "name": "frontend",
+  "type": "module",
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "generate-types": "wrangler types"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^13.2.1",
+    "@astrojs/preact": "^5.1.2",
+    "@tabler/icons-preact": "^3.41.1",
+    "@tailwindcss/vite": "4.2.4",
+    "astro": "6.1.9",
+    "preact": "^10.29.1",
+    "tailwindcss": "4.2.4",
+    "wrangler": "^4.84.1"
+  },
+  "overrides": {
+    "vite": "^7"
+  }
+}
