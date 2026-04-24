@@ -1,11 +1,8 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
-
 import tailwindcss from '@tailwindcss/vite';
-
-import cloudflare from '@astrojs/cloudflare';
-
 import preact from '@astrojs/preact';
+import node from '@astrojs/node';
 
 // https://astro.build/config
 export default defineConfig({
@@ -13,6 +10,8 @@ export default defineConfig({
     plugins: [tailwindcss()]
   },
   output: 'server',
-  adapter: cloudflare(),
+  adapter: node({
+    mode: 'standalone'
+  }),
   integrations: [preact()]
 });

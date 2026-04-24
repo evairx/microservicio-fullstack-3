@@ -5,6 +5,7 @@ import { IconHomeFilled, IconSearch } from '@tabler/icons-preact';
 import Aside from '../components/aside.astro';
 import Posts from '../components/posts/post.astro';
 import NewPost from '../components/posts/new.astro';
+import { ViewImage } from '../components/view-image';
 ---
 
 <Layout title="Inicio — Pterodactweet | La red social de los dinosaurios">
@@ -33,4 +34,5 @@ import NewPost from '../components/posts/new.astro';
             </section>
         </div>
     </main>
+    <ViewImage client:only/>
 </Layout>

@@ -8,7 +8,7 @@ async function isLogin() {
             return { login: false };
         }
 
-        const res = await fetch('http://localhost:3000/user/account', {
+        const res = await fetch('http://backend:3000/user/account', {
             headers: {
                 'Authorization': `Bearer ${sid}`
             }

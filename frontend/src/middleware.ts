@@ -15,7 +15,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
     if (!sid && rid) {
         try {
-            const response = await fetch("http://localhost:3000/user/refresh-token", {
+            const response = await fetch("http://backend:3000/user/refresh-token", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
